@@ -1,0 +1,36 @@
+{
+  "name": "defviewer",
+  "version": "0.1.0",
+  "description": "Viewer for DEF files.",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/donn/DEFViewer.git"
+  },
+  "keywords": [
+    "eda",
+    "def",
+    "design",
+    "exchange",
+    "format"
+  ],
+  "author": "Mohamed Shalan",
+  "contributors": [
+    "Claude Abounegm <claude.abounegm@gmail.com>"
+  ],
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/donn/DEFViewer/issues"
+  },
+  "homepage": "https://github.com/donn/DEFViewer#readme",
+  "dependencies": {
+    "bootstrap": "~3.3.6",
+    "bootstrap-colorpicker": "~2.3.2",
+    "jquery": "^3.3.1",
+    "jquery.panzoom": "^3.2.2",
+    "raphael": "~2.1.2"
+  }
+}
