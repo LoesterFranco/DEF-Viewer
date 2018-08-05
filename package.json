@@ -1,6 +1,6 @@
 {
   "name": "defviewer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Viewer for DEF files.",
   "main": "main.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "exchange",
     "format"
   ],
-  "author": "Mohamed Shalan",
+  "author": "Mohamed Shalan <mshalan@aucegypt.edu>",
   "contributors": [
     "Claude Abounegm <claude.abounegm@gmail.com>"
   ],
@@ -31,6 +31,10 @@
     "bootstrap-colorpicker": "~2.3.2",
     "jquery": "^3.3.1",
     "jquery.panzoom": "^3.2.2",
+    "jquery.rule": "^1.1.1",
     "raphael": "~2.1.2"
+  },
+  "devDependencies": {
+    "browserify": "^16.2.2"
   }
 }

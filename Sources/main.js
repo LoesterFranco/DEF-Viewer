@@ -5,7 +5,7 @@ require('jquery.panzoom');
 require('bootstrap');
 require('bootstrap-colorpicker');
 require('raphael');
-require('../Libraries/jquery3.rule.js');
+require('jquery.rule');
 
 // Local includes
 var parsers = require('./parsers.js').parsers;

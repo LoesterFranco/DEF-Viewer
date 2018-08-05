@@ -6,15 +6,9 @@ Base code by [@mshalan](https://github.com/mshalan), further developed by [@clau
 Ported to NPM with a very through repository bleach by [@donn](https://github.com/donn).
 
 # Dependencies
-The DEF Viewer uses jQuery, jQuery.rule, Raphael, Bootstrap, JavaScript, CSS and HTML to display the data to the browser.
+Get npm from https://nodejs.org/en/.
 
-To manage these dependencies, we use npm with browserify.
-
-First, get npm from https://nodejs.org/en/.
-
-Next, get browserify with `npm install -g browserify`.
-
-The main implementation can be found at Sources/main.js, while the DEF/LEF parsers can be found at Sources/parsers.js.
+It should handle the rest.
 
 # Usage
 ## Rebuild

@@ -1,280 +1,4 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-/*!
- * jQuery3.Rule - Css Rules manipulation, the jQuery way.
- * Copyright (c) 2007-2011 Ariel Flesler - aflesler(at)gmail(dot)com | http://flesler.blogspot.com
- * Slightly modified from Flesler's original code to work with jquery3.
- * 
- * Dual licensed under MIT and GPL.
- * Date: 02/7/2011
- * Compatible with jQuery 1.2+
- *
- * @author Ariel Flesler
- * @version 1.0.2
- *
- * @id jQuery.rule
- * @param {Undefined|String|jQuery.Rule} The rules, can be a selector, or literal CSS rules. Many can be given, comma separated.
- * @param {Undefined|String|DOMElement|jQuery) The context stylesheets, all of them by default.
- * @return {jQuery.Rule} Returns a jQuery.Rule object.
- *
- * @example $.rule('p,div').filter(function(){ return this.style.display != 'block'; }).remove();
- *
- * @example $.rule('div{ padding:20px;background:#CCC}, p{ border:1px red solid; }').appendTo('style');
- *
- * @example $.rule('div{}').append('margin:40px').css('margin-left',0).appendTo('link:eq(1)');
- *
- * @example $.rule().not('div, p.magic').fadeOut('slow');
- *
- * @example var text = $.rule('#screen h2').add('h4').end().eq(4).text();
- */
-; (function ($) {
-
-    /**
-     * Notes
-     *	Some styles and animations might fail, please report it.
-     *	The plugin needs a style node to stay in the DOM all along to temporarily hold rules. DON'T TOUCH IT.
-     *	Opera requires this style to have alternate in the rel to allow disabling it.
-     *	Rules in IE don't have .parentStylesheet. We need to find it each time(slow).
-     *	Animations need close attention. Programatically knowing which rule has precedence, would require a LOT of work.
-     *	This plugin adds $.rule and also 4 methods to $.fn: ownerNode, sheet, cssRules and cssText
-     *	Note that rules are not directly inside nodes, you need to do: $('style').sheet().cssRules().
-     */
-
-    var storageNode = $('<style rel="alternate stylesheet" type="text/css" />').appendTo('head')[0],//we must append to get a stylesheet
-		sheet = storageNode.sheet ? 'sheet' : 'styleSheet',
-		storage = storageNode[sheet],//css rules must remain in a stylesheet for IE and FF
-		rules = storage.rules ? 'rules' : 'cssRules',
-		remove = storage.deleteRule ? 'deleteRule' : 'removeRule',
-		owner = storage.ownerNode ? 'ownerNode' : 'owningElement',
-		reRule = /^([^{]+)\{([^}]*)\}/m,
-		reStyle = /([^:]+):([^;}]+)/;
-
-    storage.disabled = true;//let's ignore your rules 
-
-    var $rule = $.rule = function (r, c) {
-        if (!(this instanceof $rule))
-            return new $rule(r, c);
-
-        this.sheets = $rule.sheets(c);
-        if (r && reRule.test(r))
-            r = $rule.clean(r);
-        if (typeof r == 'object' && !r.exec) {
-            setArray(this, r.get ? r.get() : r.splice ? r : [r]);
-        } else {
-            setArray(this, this.sheets.cssRules().get());
-            if (r)
-                return this.filter(r);
-        }
-        return this;
-    };
-
-    $.extend($rule, {
-        sheets: function (c) {
-            var o = c;
-            if (typeof o != 'object')
-                o = $.makeArray(document.styleSheets);
-            o = $(o).not(storage);//skip our stylesheet
-            if (typeof c == 'string')
-                o = o.ownerNode().filter(c).sheet();
-            return o;
-        },
-        rule: function (str) {
-            if (str.selectorText)/* * */
-                return ['', str.selectorText, str.style.cssText];
-            return reRule.exec(str);
-        },
-        appendTo: function (r, ss, skip) {
-            switch (typeof ss) {//find the desired stylesheet
-                case 'string': ss = this.sheets(ss);
-                case 'object':
-                    if (ss[0]) ss = ss[0];
-                    if (ss[sheet]) ss = ss[sheet];
-                    if (ss[rules]) break;//only if the stylesheet is valid
-                default:
-                    if (typeof r == 'object') return r;//let's not waist time, it is parsed
-                    ss = storage;
-            }
-            var p;
-            if (!skip && (p = this.parent(r)))//if this is an actual rule, and it's appended.
-                r = this.remove(r, p);
-
-            var rule = this.rule(r);
-            if (ss.addRule)
-                ss.addRule(rule[1], rule[2] || ';');//IE won't allow empty rules
-            else if (ss.insertRule)
-                ss.insertRule(rule[1] + '{' + rule[2] + '}', ss[rules].length);
-
-            return ss[rules][ss[rules].length - 1];//return the added/parsed rule
-        },
-        remove: function (r, p) {
-            p = p || this.parent(r);
-            if (p != storage) {//let's save some unnecesary cycles.
-                var i = p ? $.inArray(r, p[rules]) : -1;
-                if (i != -1) {//if not stored before removal, IE will crash eventually, and some rules in FF get messed up
-                    r = this.appendTo(r, 0 /*storage*/, true);//is faster and shorter to imply storage
-                    p[remove](i);
-                }
-            }
-            return r;
-        },
-        clean: function (r) {
-            return $.map(r.split('}'), function (txt) {
-                if (txt)
-                    return $rule.appendTo(txt + '}' /*, storage*/);//parse the string, storage implied
-            });
-        },
-        parent: function (r) {//CSS rules in IE don't have parentStyleSheet attribute
-            if (typeof r == 'string' || r.parentStyleSheet !== undefined)//if it's a string, just return undefined.
-                return r.parentStyleSheet;
-
-            var par;
-            this.sheets().each(function () {
-                if ($.inArray(r, this[rules]) != -1) {
-                    par = this;
-                    return false;
-                }
-            });
-            return par;
-        },
-        outerText: function (rule) {
-            return !rule || !rule.selectorText ? '' : [rule.selectorText + '{', '\t' + rule.style.cssText, '}'].join('\n').toLowerCase();
-        },
-        text: function (rule, txt) {
-            if (txt !== undefined)
-                rule.style.cssText = txt;
-            return !rule ? '' : rule.style.cssText.toLowerCase();
-        }
-    });
-
-    $rule.fn = $rule.prototype = {
-        pushStack: function (rs, sh) {
-            var ret = $rule(rs, sh || this.sheets);
-            ret.prevObject = this;
-            return ret;
-        },
-        end: function () {
-            return this.prevObject || $rule(0, []);
-        },
-        filter: function (s) {
-            var o;
-            if (!s) s = /./;//just keep them all.
-            if (s.split) {
-                o = $.trim(s).toLowerCase().split(/\s*,\s*/);
-                s = function () {
-                    var s = this.selectorText || '';
-                    return !!$.grep(s.toLowerCase().split(/\s*,\s*/), function (sel) {
-                        return $.inArray(sel, o) != -1;
-                    }).length;
-                };
-            } else if (s.exec) {//string regex, or actual regex
-                o = s;
-                s = function () { return o.test(this.selectorText); };
-            }
-            return this.pushStack($.grep(this, function (e, i) {
-                return s.call(e, i);
-            }));
-        },
-        add: function (rs, c) {
-            return this.pushStack($.merge(this.get(), $rule(rs, c)));
-        },
-        is: function (s) {
-            return !!(s && this.filter(s).length);
-        },
-        not: function (n, c) {
-            n = $rule(n, c);
-            return this.filter(function () {
-                return $.inArray(this, n) == -1;
-            });
-        },
-        append: function (s) {
-            var rules = this, rule;
-            $.each(s.split(/\s*;\s*/), function (i, v) {
-                if ((rule = reStyle.exec(v)))
-                    rules.css(rule[1], rule[2]);
-            });
-            return this;
-        },
-        text: function (txt) {
-            return !arguments.length ? $rule.text(this[0])
-				: this.each(function () { $rule.text(this, txt); });
-        },
-        outerText: function () {
-            return $rule.outerText(this[0]);
-        }
-    };
-
-    $.each({
-        ownerNode: owner,//when having the stylesheet, get the node that contains it
-        sheet: sheet, //get the stylesheet from the node
-        cssRules: rules //get the rules from the stylesheet.
-    }, function (m, a) {
-        var many = a == rules;//the rules need some more processing
-        $.fn[m] = function () {
-            return this.map(function () {
-                return many ? $.makeArray(this[a]) : this[a];
-            });
-        };
-    });
-
-    $.fn.cssText = function () {
-        return this.filter('link,style').eq(0).sheet().cssRules().map(function () {
-            return $rule.outerText(this);
-        }).get().join('\n');
-    };
-
-    $.each('remove,appendTo,parent'.split(','), function (k, f) {
-        $rule.fn[f] = function () {
-            var args = $.makeArray(arguments), that = this;
-            args.unshift(0);
-            return this.each(function (i) {
-                args[0] = this;
-                that[i] = $rule[f].apply($rule, args) || that[i];
-            });
-        };
-    });
-
-    $.each(('each,index,get,size,eq,slice,map,attr,andSelf,css,show,hide,toggle,' +
-			'queue,dequeue,stop,animate,fadeIn,fadeOut,fadeTo').split(','), function (k, f) {
-			    $rule.fn[f] = $.fn[f];
-			});
-
-    // this function has been pulled in from jQuery 1.4.1, because it is an internal function and has been dropped as of 1.4.2
-    function setArray(rule, elems) {
-        rule.length = 0;
-        Array.prototype.push.apply(rule, elems);
-    }
-
-    var curCSS = $.curCSS;
-    $.curCSS = function (e, a) {//this hack is still quite exprimental
-        return ('selectorText' in e) ?
-			e.style[a] || $.prop(e, a == 'opacity' ? 1 : 0, 'curCSS', 0, a)//TODO: improve these defaults
-		: curCSS.apply(this, arguments);
-    };
-
-    /**
-	 * Time to hack jQuery.data for animations.
-	 * Only IE really needs this, but to keep the behavior consistent, I'll hack it for all browsers.
-	 * TODO: This kind of id doesn't seem to be good enough
-	 * TODO: Avoid animating similar rules simultaneously
-	 * TODO: Avoid rules' precedence from interfering on animations ?
-	 */
-    $rule.cache = {};
-    var mediator = function (original) {
-        return function (elm) {
-            var id = elm.selectorText;
-            if (id)
-                arguments[0] = $rule.cache[id] = $rule.cache[id] || {};
-            return original.apply($, arguments);
-        };
-    };
-    $.data = mediator($.data);
-    $.removeData = mediator($.removeData);
-
-    $(window).on("unload", function () {
-        $(storage).cssRules().remove();//empty our rules bin
-    });
-
-})(jQuery);
-},{}],2:[function(require,module,exports){
 // var raphael = require('raphael');
 
 // Extension to Raphael, to allow auto sizing of the SVG canvas.
@@ -338,24 +62,8 @@ exports.rainbow= function(numOfSteps, step) {
     var c = "#" + ("00" + (~ ~(r * 255)).toString(16)).slice(-2) + ("00" + (~ ~(g * 255)).toString(16)).slice(-2) + ("00" + (~ ~(b * 255)).toString(16)).slice(-2);
     return (c);
 }
-},{}],3:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 (function (global){
-/*
-* Project 3
-* Adapted from Dr. Shalan's base code.
-*
-* Developed by:
-*  Shady Fanous
-*  Shehab Mohamed
-*  Claude Abounegm
-*/
-
-// / <reference path="../jquery-2.2.3.js" />
-// / <reference path="../bootstrap.js" />
-// / <reference path="../bootstrap-colorpicker.js" />
-// / <reference path="../jquery.rule.js" />
-// / <reference path="../raphael.js" />
-
 // Libraries
 $ = require('jquery');
 global.jQuery = $;
@@ -363,7 +71,7 @@ require('jquery.panzoom');
 require('bootstrap');
 require('bootstrap-colorpicker');
 require('raphael');
-require('../Libraries/jquery3.rule.js');
+require('jquery.rule');
 
 // Local includes
 var parsers = require('./parsers.js').parsers;
@@ -873,7 +581,7 @@ defViewer.drawDEF = function () {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../Libraries/jquery3.rule.js":1,"./extensions.js":2,"./parsers.js":4,"bootstrap":6,"bootstrap-colorpicker":5,"jquery":21,"jquery.panzoom":20,"raphael":22}],4:[function(require,module,exports){
+},{"./extensions.js":1,"./parsers.js":3,"bootstrap":5,"bootstrap-colorpicker":4,"jquery":21,"jquery.panzoom":19,"jquery.rule":20,"raphael":22}],3:[function(require,module,exports){
 exports.parsers = function () {
     "use strict";
 
@@ -1029,7 +737,7 @@ exports.parsers = function () {
 
     return _this;
 }();
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 /*!
  * Bootstrap Colorpicker v2.3.6
  * https://itsjavi.com/bootstrap-colorpicker/
@@ -2147,7 +1855,7 @@ exports.parsers = function () {
 
 }));
 
-},{}],6:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 // This file is autogenerated via the `commonjs` Grunt task. You can require() this file in a CommonJS environment.
 require('../../js/transition.js')
 require('../../js/alert.js')
@@ -2161,7 +1869,7 @@ require('../../js/popover.js')
 require('../../js/scrollspy.js')
 require('../../js/tab.js')
 require('../../js/affix.js')
-},{"../../js/affix.js":7,"../../js/alert.js":8,"../../js/button.js":9,"../../js/carousel.js":10,"../../js/collapse.js":11,"../../js/dropdown.js":12,"../../js/modal.js":13,"../../js/popover.js":14,"../../js/scrollspy.js":15,"../../js/tab.js":16,"../../js/tooltip.js":17,"../../js/transition.js":18}],7:[function(require,module,exports){
+},{"../../js/affix.js":6,"../../js/alert.js":7,"../../js/button.js":8,"../../js/carousel.js":9,"../../js/collapse.js":10,"../../js/dropdown.js":11,"../../js/modal.js":12,"../../js/popover.js":13,"../../js/scrollspy.js":14,"../../js/tab.js":15,"../../js/tooltip.js":16,"../../js/transition.js":17}],6:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: affix.js v3.3.7
  * http://getbootstrap.com/javascript/#affix
@@ -2325,7 +2033,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],8:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: alert.js v3.3.7
  * http://getbootstrap.com/javascript/#alerts
@@ -2421,7 +2129,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: button.js v3.3.7
  * http://getbootstrap.com/javascript/#buttons
@@ -2548,7 +2256,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: carousel.js v3.3.7
  * http://getbootstrap.com/javascript/#carousel
@@ -2787,7 +2495,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: collapse.js v3.3.7
  * http://getbootstrap.com/javascript/#collapse
@@ -3001,7 +2709,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: dropdown.js v3.3.7
  * http://getbootstrap.com/javascript/#dropdowns
@@ -3168,7 +2876,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],13:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: modal.js v3.3.7
  * http://getbootstrap.com/javascript/#modals
@@ -3509,7 +3217,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],14:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: popover.js v3.3.7
  * http://getbootstrap.com/javascript/#popovers
@@ -3619,7 +3327,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],15:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: scrollspy.js v3.3.7
  * http://getbootstrap.com/javascript/#scrollspy
@@ -3793,7 +3501,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],16:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: tab.js v3.3.7
  * http://getbootstrap.com/javascript/#tabs
@@ -3950,7 +3658,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],17:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: tooltip.js v3.3.7
  * http://getbootstrap.com/javascript/#tooltip
@@ -4472,7 +4180,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],18:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /* ========================================================================
  * Bootstrap: transition.js v3.3.7
  * http://getbootstrap.com/javascript/#transitions
@@ -4533,7 +4241,7 @@ require('../../js/affix.js')
 
 }(jQuery);
 
-},{}],19:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -4906,7 +4614,7 @@ require('../../js/affix.js')
     (typeof module != "undefined" && module.exports) ? (module.exports = eve) : (typeof define != "undefined" ? (define("eve", [], function() { return eve; })) : (glob.eve = eve));
 })(this);
 
-},{}],20:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /**
  * @license jquery.panzoom.js v3.2.2
  * Updated: Sun Aug 28 2016
@@ -6213,7 +5921,298 @@ require('../../js/affix.js')
 	return Panzoom;
 }));
 
-},{"jquery":21}],21:[function(require,module,exports){
+},{"jquery":21}],20:[function(require,module,exports){
+/*!
+ * jQuery.Rule - CSS Rules manipulation, the jQuery way.
+ * Copyright (c) 2007 Ariel Flesler - aflesler(at)gmail(dot)com | http://flesler.blogspot.com
+ * Dual licensed under MIT and GPL.
+ * Date: 14/07/2018
+ *
+ * @author Ariel Flesler
+ * @version 1.1.1
+ *
+ * @id jQuery.rule
+ * @param {Undefined|String|jQuery.Rule} The rules, can be a selector, or literal CSS rules. Many can be given, comma separated.
+ * @param {Undefined|String|DOMElement|jQuery) The context stylesheets, all of them by default.
+ * @return {jQuery.Rule} Returns a jQuery.Rule object.
+ *
+ * @example $.rule('p,div').filter(function(){ return this.style.display != 'block'; }).remove();
+ *
+ * @example $.rule('div{ padding:20px;background:#CCC}, p{ border:1px red solid; }').appendTo('style');
+ *
+ * @example $.rule('div{}').append('margin:40px').css('margin-left',0).appendTo('link:eq(1)');
+ *
+ * @example $.rule().not('div, p.magic').fadeOut('slow');
+ *
+ * @example var text = $.rule('#screen h2').add('h4').end().eq(4).text();
+ */
+;(function( $ ){
+
+   /**
+	* Notes
+	*	Some styles and animations might fail, please report it.
+	*	The plugin needs a style node to stay in the DOM all along to temporarily hold rules. DON'T TOUCH IT.
+	*	Opera requires this style to have alternate in the rel to allow disabling it.
+	*	Rules in IE don't have .parentStylesheet. We need to find it each time(slow).
+	*	Animations need close attention. Programatically knowing which rule has precedence, would require a LOT of work.
+	*	This plugin adds $.rule and also 4 methods to $.fn: ownerNode, sheet, cssRules and cssText
+	*	Note that rules are not directly inside nodes, you need to do: $('style').sheet().cssRules().
+	*/
+
+	var storageNode = $('<style rel="alternate stylesheet" type="text/css" />').appendTo('head')[0],//we must append to get a stylesheet
+		sheet = storageNode.sheet ? 'sheet' : 'styleSheet',
+		storage = storageNode[sheet],//css rules must remain in a stylesheet for IE and FF
+		rules = storage.rules ? 'rules' : 'cssRules',
+		remove = storage.deleteRule ? 'deleteRule' : 'removeRule',
+		owner = storage.ownerNode ? 'ownerNode' : 'owningElement',
+		reRule = /^([^{]+)\{([^}]*)\}/m,
+		reStyle = /([^:]+):([^;}]+)/;
+
+	storage.disabled = true;//let's ignore your rules
+
+	var $rule = $.rule = function( r, c ){
+		if(!(this instanceof $rule))
+			return new $rule( r, c );
+
+		this.sheets = $rule.sheets(c);
+		if( r && reRule.test(r) )
+			r = $rule.clean( r );
+		if( typeof r == 'object' && !r.exec ) {
+			setArray( this, r.get ? r.get() : r.splice ? r : [r] );
+		} else {
+			setArray( this, this.sheets.cssRules().get() );
+			if (r)
+				return this.filter( r );
+		}
+		return this;
+	};
+
+	$.extend( $rule, {
+		sheets:function( c ){
+			var o = c;
+			if( typeof o != 'object' )
+				o = $.makeArray(document.styleSheets);
+			o = $(o).not(storage);//skip our stylesheet
+			if( typeof c == 'string' )
+				o = o.ownerNode().filter(c).sheet();
+			return o;
+		},
+		rule:function( str ){
+			if( str.selectorText )/* * */
+				return [ '', str.selectorText, str.style.cssText ];
+			return reRule.exec( str );
+		},
+		appendTo:function( r, ss, skip ){
+			switch( typeof ss ){//find the desired stylesheet
+				case 'string': ss = this.sheets(ss);
+				case 'object':
+					if( ss[0] ) ss = ss[0];
+					if( ss[sheet] ) ss = ss[sheet];
+					if( ss[rules] ) break;//only if the stylesheet is valid
+				default:
+					if( typeof r == 'object' ) return r;//let's not waist time, it is parsed
+					ss = storage;
+			}
+			var p;
+			if( !skip && (p = this.parent(r)) )//if this is an actual rule, and it's appended.
+				r = this.remove( r, p );
+
+			var rule = this.rule( r );
+			if( ss.addRule )
+				ss.addRule( rule[1], rule[2]||';' );//IE won't allow empty rules
+			else if( ss.insertRule )
+				ss.insertRule( rule[1] + '{'+ rule[2] +'}', ss[rules].length );
+
+			return ss[rules][ ss[rules].length - 1 ];//return the added/parsed rule
+		},
+		remove:function( r, p ){
+			p = p || this.parent(r);
+			if( p != storage ){//let's save some unnecesary cycles.
+				var i = p ? $.inArray( r, p[rules] ) : -1;
+				if( i != -1 ){//if not stored before removal, IE will crash eventually, and some rules in FF get messed up
+					r = this.appendTo( r, 0 /*storage*/, true );//is faster and shorter to imply storage
+					p[remove](i);
+				}
+			}
+			return r;
+		},
+		clean:function( r ){
+			return $.map( r.split('}'), function( txt ){
+				if( txt )
+					return $rule.appendTo( txt + '}' /*, storage*/ );//parse the string, storage implied
+			});
+		},
+		parent:function( r ){//CSS rules in IE don't have parentStyleSheet attribute
+			if( typeof r == 'string' || r.parentStyleSheet !== undefined )//if it's a string, just return undefined.
+				return r.parentStyleSheet;
+
+			var par;
+			this.sheets().each(function(){
+				if( $.inArray(r, this[rules]) != -1 ){
+					par = this;
+					return false;
+				}
+			});
+			return par;
+		},
+		outerText:function( rule ){
+			return !rule || !rule.selectorText ? '' : [rule.selectorText+'{', '\t'+rule.style.cssText,'}'].join('\n').toLowerCase();
+		},
+		text:function( rule, txt ){
+			if( txt !== undefined )
+				rule.style.cssText = txt;
+			return !rule ? '' : rule.style.cssText.toLowerCase();
+		}
+	});
+
+	$rule.fn = $rule.prototype = {
+		pushStack:function( rs, sh ){
+			var ret = $rule( rs, sh || this.sheets );
+			ret.prevObject = this;
+			return ret;
+		},
+		end:function(){
+			return this.prevObject || $rule(0,[]);
+		},
+		filter:function( s ){
+			var o;
+			if( !s ) s = /./;//just keep them all.
+			if( s.split ){
+				o = $.trim(s).toLowerCase().split(/\s*,\s*/);
+				s = function(){
+					var s = this.selectorText || '';
+					return !!$.grep( s.toLowerCase().split(/\s*,\s*/), function( sel ){
+						return $.inArray( sel, o ) != -1;
+					}).length;
+				};
+			}else if( s.exec ){//string regex, or actual regex
+				o = s;
+				s = function(){ return o.test(this.selectorText); };
+			}
+			return this.pushStack($.grep( this, function( e, i ){
+				return s.call( e, i );
+			}));
+		},
+		add:function( rs, c ){
+			return this.pushStack( $.merge(this.get(), $rule(rs, c)) );
+		},
+		is:function( s ){
+			return !!(s && this.filter( s ).length);
+		},
+		not:function( n, c ){
+			n = $rule( n, c );
+			return this.filter(function(){
+				return $.inArray( this, n ) == -1;
+			});
+		},
+		append:function( s ){
+			var rules = this, rule;
+			$.each( s.split(/\s*;\s*/),function(i,v){
+				if(( rule = reStyle.exec( v ) ))
+					rules.css( rule[1], rule[2] );
+			});
+			return this;
+		},
+		text:function( txt ){
+			return !arguments.length ? $rule.text( this[0] )
+				: this.each(function(){	$rule.text( this, txt ); });
+		},
+		outerText:function(){
+			return $rule.outerText(this[0]);
+		}
+	};
+	
+	$.each({
+		ownerNode:owner,//when having the stylesheet, get the node that contains it
+		sheet:sheet, //get the stylesheet from the node
+		cssRules:rules //get the rules from the stylesheet.
+	},function( m, a ){
+		var many = a == rules;//the rules need some more processing
+		$.fn[m] = function(){
+			return this.map(function(){
+        var prop;
+        try {
+          // In Chrome, if stylesheet originates from a different domain,
+          // ss.cssRules simply won't exist. I believe the same is true for IE, but
+          // I haven't tested it.
+          //
+          // In Firefox, if stylesheet originates from a different domain, trying
+          // to access ss.cssRules will throw a SecurityError. Hence, we must use
+          // try/catch to detect this condition in Firefox.
+          prop = this[a];
+        } catch(e) {
+          // Rethrow exception if it's not a SecurityError. Note that SecurityError
+          // exception is specific to Firefox.
+          if(e.name !== 'SecurityError')
+            throw e;
+          prop = null;
+        }
+        return many ? $.makeArray(prop) : prop;
+			});
+		};
+	});
+	
+	$.fn.cssText = function(){
+		return this.filter('link,style').eq(0).sheet().cssRules().map(function(){
+			return $rule.outerText(this);							   
+		}).get().join('\n');
+	};
+	
+	$.each('remove,appendTo,parent'.split(','),function( k, f ){
+		$rule.fn[f] = function(){
+			var args = $.makeArray(arguments), that = this;
+			args.unshift(0);
+			return this.each(function( i ){
+				args[0] = this;
+				that[i] = $rule[f].apply( $rule, args ) || that[i];
+			});
+		};
+	});
+		
+	$.each(('each,index,get,size,eq,slice,map,attr,andSelf,css,show,hide,toggle,'+
+			'queue,dequeue,stop,animate,fadeIn,fadeOut,fadeTo').split(','),function( k, f ){
+		$rule.fn[f] = $.fn[f];																				  
+	});
+	
+	// this function has been pulled in from jQuery 1.4.1, because it is an internal function and has been dropped as of 1.4.2
+	function setArray(rule, elems) { 
+		rule.length = 0;
+		Array.prototype.push.apply( rule, elems );
+	}
+	
+	var curCSS = $.curCSS;
+	$.curCSS = function( e, a ){//this hack is still quite exprimental
+		return ('selectorText' in e ) ?
+			e.style[a] || $.prop( e, a=='opacity'? 1 : 0,'curCSS', 0, a )//TODO: improve these defaults
+		: curCSS.apply(this,arguments);
+	};
+	
+	/**
+	 * Time to hack jQuery.data for animations.
+	 * Only IE really needs this, but to keep the behavior consistent, I'll hack it for all browsers.
+	 * TODO: This kind of id doesn't seem to be good enough
+	 * TODO: Avoid animating similar rules simultaneously
+	 * TODO: Avoid rules' precedence from interfering on animations ?
+	 */
+	$rule.cache = {};
+	var mediator = function( original ){
+		return function( elm ){
+			var id = elm.selectorText;
+			if( id )
+				arguments[0] = $rule.cache[id] = $rule.cache[id] || {};
+			return original.apply( $, arguments );	
+		};
+	};
+	$.data = mediator( $.data );
+	$.removeData = mediator( $.removeData );
+	
+	$(window).on("unload", function () {
+		$(storage).cssRules().remove();//empty our rules bin
+	});
+		
+})( jQuery );
+
+},{}],21:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.3.1
  * https://jquery.com/
@@ -24820,4 +24819,4 @@ return jQuery;
     return R;
 }));
 
-},{"eve":19}]},{},[4,3,2]);
+},{"eve":18}]},{},[3,2,1]);
